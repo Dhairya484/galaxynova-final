@@ -23,49 +23,50 @@ from pydantic import BaseModel, Field
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# Load environment variables
 load_dotenv(BASE_DIR / ".env")
 
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+MODEL = os.getenv(
+    "GROQ_MODEL",
+    "openai/gpt-oss-120b"
+)
+
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 DATABASE_FILE = BASE_DIR / "training_data.json"
 
 MAX_RETRIES_PER_KEY = 2
 REQUEST_TIMEOUT = 90
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s:%(name)s:%(message)s"
-)
+logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger("GalaxyNovaAI")
 
 
 # ==================================================
-# 2. LOAD GEMINI API KEYS
+# 2. LOAD MULTIPLE GROQ API KEYS
 # ==================================================
 
 API_KEYS = []
 
 for number in range(1, 21):
 
-    key = os.getenv(f"GEMINI_API_KEY_{number}")
+    key = os.getenv(f"GROQ_API_KEY_{number}")
 
     if key and key.strip():
         API_KEYS.append(key.strip())
 
-# Fallback to a single key if numbered keys are absent
+# Support a single key as well
 if not API_KEYS:
 
-    single_key = os.getenv("GEMINI_API_KEY")
+    key = os.getenv("GROQ_API_KEY")
 
-    if single_key and single_key.strip():
-        API_KEYS.append(single_key.strip())
+    if key and key.strip():
+        API_KEYS.append(key.strip())
 
 
 logger.info("Galaxy Nova AI starting")
-logger.info("Gemini keys loaded: %s", len(API_KEYS))
-logger.info("Gemini model: %s", MODEL)
+logger.info("Groq API keys loaded: %s", len(API_KEYS))
+logger.info("Groq model: %s", MODEL)
 
 
 # ==================================================
@@ -75,7 +76,7 @@ logger.info("Gemini model: %s", MODEL)
 app = FastAPI(
     title="Galaxy Nova AI",
     description="Galaxy Nova AI Assistant",
-    version="3.0"
+    version="4.0"
 )
 
 app.add_middleware(
@@ -117,9 +118,10 @@ GREETINGS = {
 
     "thanks": "You're welcome! 😊",
 
-    "thank you": "Happy to help! Ask me anything else.",
+    "thank you": "Happy to help!",
 
     "bye": "Goodbye! See you again on Galaxy Nova AI. 👋"
+
 }
 
 
@@ -163,12 +165,12 @@ def load_database():
 
         if isinstance(data, dict):
 
-            for key in [
+            for key in (
                 "entries",
                 "data",
                 "knowledge",
                 "topics"
-            ]:
+            ):
 
                 if isinstance(data.get(key), list):
                     return data[key]
@@ -283,7 +285,6 @@ def search_database(question):
             saved_question
             and saved_question == question.lower().strip()
         ):
-
             score += 1
 
         if score > best_score:
@@ -293,7 +294,7 @@ def search_database(question):
 
     if best_score >= 0.45:
 
-        logger.info("Database answer found")
+        logger.info("Answer found in local database")
 
         return best_answer
 
@@ -316,22 +317,29 @@ class ChatRequest(BaseModel):
 # ==================================================
 
 SYSTEM_INSTRUCTION = """
-You are Galaxy Nova AI, a helpful and intelligent AI assistant.
+You are Galaxy Nova AI, an intelligent and helpful AI assistant.
 
 Your responsibilities:
 
-1. Answer questions clearly and accurately.
+1. Answer questions accurately and clearly.
 2. Be friendly and respectful.
 3. Explain difficult topics in simple language.
-4. Help with HTML, CSS, JavaScript, Python and other coding.
+4. Help with HTML, CSS, JavaScript, Python and other programming.
 5. When asked to write code, provide complete working code.
-6. Include all necessary files when a project requires multiple files.
+6. Include all required files for multi-file projects.
 7. Explain how to run the code when useful.
-8. Help debug and fix programming errors.
+8. Debug programming errors.
 9. Use headings and lists when appropriate.
 10. Admit when you do not know something.
 11. Never invent facts or sources.
 12. Do not claim to browse the internet unless browsing is available.
+
+For coding requests:
+- Understand the user's requirements.
+- Write complete code.
+- Include necessary HTML, CSS and JavaScript.
+- Explain where each file belongs.
+- Avoid unnecessary placeholders.
 
 You are Galaxy Nova AI.
 """
@@ -365,11 +373,11 @@ def prepare_contents(messages, fallback_message=""):
 
         if role in ("assistant", "model"):
 
-            gemini_role = "model"
+            groq_role = "assistant"
 
         elif role == "user":
 
-            gemini_role = "user"
+            groq_role = "user"
 
         else:
 
@@ -410,17 +418,13 @@ def prepare_contents(messages, fallback_message=""):
 
             contents.append({
 
-                "role": gemini_role,
+                "role": groq_role,
 
-                "parts": [
-                    {
-                        "text": content
-                    }
-                ]
+                "content": content
 
             })
 
-    # Gemini conversations should start with a user message
+    # Conversation must start with a user message
     while contents and contents[0]["role"] != "user":
 
         contents.pop(0)
@@ -429,84 +433,71 @@ def prepare_contents(messages, fallback_message=""):
 
 
 # ==================================================
-# 10. GEMINI API WITH MULTI-KEY RETRIES
+# 10. GROQ API WITH MULTIPLE KEYS AND RETRIES
 # ==================================================
 
-async def ask_gemini(messages):
+async def ask_groq(messages):
 
     if not API_KEYS:
 
         return (
-            "No Gemini API keys are configured. "
-            "Please add your API keys to Render Environment Variables."
+            "No Groq API keys configured. "
+            "Add GROQ_API_KEY_1 to your environment variables."
         )
-
-    url = (
-        "https://generativelanguage.googleapis.com/"
-        f"v1beta/models/{MODEL}:generateContent"
-    )
 
     payload = {
 
-        "systemInstruction": {
+        "model": MODEL,
 
-            "parts": [
-                {
-                    "text": SYSTEM_INSTRUCTION
-                }
-            ]
+        "messages": [
+            {
+                "role": "system",
+                "content": SYSTEM_INSTRUCTION
+            }
+        ] + messages,
 
-        },
+        "temperature": 0.7,
 
-        "contents": messages,
+        "max_completion_tokens": 4096,
 
-        "generationConfig": {
-
-            "temperature": 0.7,
-
-            "maxOutputTokens": 2048
-
-        }
+        "stream": False
 
     }
 
     errors = []
 
     retryable_statuses = {
-        408, 429, 500, 502, 503, 504
+        408, 409, 429, 500, 502, 503, 504
     }
 
     async with httpx.AsyncClient(
         timeout=REQUEST_TIMEOUT
     ) as client:
 
-        # Try every available key
         for index, api_key in enumerate(
             API_KEYS,
             start=1
         ):
 
-            for attempt in range(
-                MAX_RETRIES_PER_KEY
-            ):
+            for attempt in range(MAX_RETRIES_PER_KEY):
 
                 try:
 
                     logger.info(
-                        "Trying Gemini key %s, attempt %s",
+                        "Trying Groq key %s, attempt %s",
                         index,
                         attempt + 1
                     )
 
                     response = await client.post(
 
-                        url,
+                        GROQ_URL,
 
                         headers={
 
                             "Content-Type": "application/json",
 
-                            "x-goog-api-key": api_key
+                            "Authorization": f"Bearer {api_key}"
 
                         },
 
@@ -514,42 +505,28 @@ async def ask_gemini(messages):
 
                     )
 
-                    # SUCCESS
                     if response.status_code == 200:
 
                         data = response.json()
 
-                        candidates = data.get(
-                            "candidates",
-                            []
-                        )
+                        choices = data.get("choices", [])
 
-                        if candidates:
+                        if choices:
 
-                            parts = (
-                                candidates[0]
-                                .get("content", {})
-                                .get("parts", [])
+                            reply = (
+                                choices[0]
+                                .get("message", {})
+                                .get("content", "")
                             )
 
-                            reply = "".join(
-
-                                part.get("text", "")
-
-                                for part in parts
-
-                                if isinstance(part, dict)
-
-                            ).strip()
-
-                            if reply:
+                            if isinstance(reply, str) and reply.strip():
 
                                 logger.info(
-                                    "Gemini succeeded with key %s",
+                                    "Groq succeeded using key %s",
                                     index
                                 )
 
-                                return reply
+                                return reply.strip()
 
                         errors.append(
                             f"Key {index}: Empty response"
@@ -557,13 +534,12 @@ async def ask_gemini(messages):
 
                         break
 
-                    # FAILURE
                     status = response.status_code
 
-                    error_text = response.text[:500]
+                    error_text = response.text[:700]
 
                     logger.warning(
-                        "Key %s returned HTTP %s",
+                        "Groq key %s returned HTTP %s",
                         index,
                         status
                     )
@@ -572,15 +548,33 @@ async def ask_gemini(messages):
                         f"Key {index}: HTTP {status}: {error_text}"
                     )
 
-                    # Do not retry permanent errors
                     if status not in retryable_statuses:
 
                         break
 
+                    # Respect Groq's retry-after header if present
+                    retry_after = response.headers.get(
+                        "retry-after"
+                    )
+
+                    if retry_after:
+
+                        try:
+                            delay = min(
+                                max(float(retry_after), 1),
+                                30
+                            )
+                        except ValueError:
+                            delay = 2 ** (attempt + 1)
+
+                    else:
+
+                        delay = 2 ** (attempt + 1)
+
                 except httpx.TimeoutException:
 
                     logger.warning(
-                        "Key %s request timed out",
+                        "Groq key %s timed out",
                         index
                     )
 
@@ -588,11 +582,12 @@ async def ask_gemini(messages):
                         f"Key {index}: Request timed out"
                     )
 
+                    delay = 2 ** (attempt + 1)
+
                 except httpx.TransportError as error:
 
                     logger.warning(
-                        "Key %s network error: %s",
-                        index,
+                        "Groq network error: %s",
                         str(error)
                     )
 
@@ -600,10 +595,12 @@ async def ask_gemini(messages):
                         f"Key {index}: Network error"
                     )
 
+                    delay = 2 ** (attempt + 1)
+
                 except Exception as error:
 
                     logger.exception(
-                        "Unexpected Gemini error"
+                        "Unexpected Groq error"
                     )
 
                     errors.append(
@@ -612,74 +609,80 @@ async def ask_gemini(messages):
 
                     break
 
-                # Retry with exponential backoff
                 if attempt < MAX_RETRIES_PER_KEY - 1:
 
-                    delay = (
-                        2 ** (attempt + 1)
-                        + random.uniform(0, 2)
-                    )
+                    delay += random.uniform(0, 1)
 
                     logger.info(
-                        "Waiting %.1f seconds before retry",
+                        "Retrying in %.1f seconds",
                         delay
                     )
 
                     await asyncio.sleep(delay)
 
             logger.info(
-                "Moving to Gemini key %s",
-                index + 1
+                "Moving to next Groq API key"
             )
 
-    # ==================================================
-    # 11. ERROR RESPONSES
-    # ==================================================
-
     logger.error(
-        "All Gemini keys failed: %s",
+        "All Groq keys failed: %s",
         errors
     )
+
+    if any("401" in error for error in errors):
+
+        return (
+            "A Groq API key was rejected. "
+            "Please check your API keys."
+        )
+
+    if any("403" in error for error in errors):
+
+        return (
+            "Groq denied access. Check your account, "
+            "project permissions and model access."
+        )
 
     if any("404" in error for error in errors):
 
         return (
-            f"Gemini model '{MODEL}' is unavailable "
-            "or not accessible to your API project. "
-            "Please check the model name and API access."
+            f"Groq model '{MODEL}' was not found or is unavailable. "
+            "Check the model name in your environment variables."
         )
 
     if any("429" in error for error in errors):
 
         return (
-            "Gemini API rate limit or quota exceeded. "
+            "Groq rate limit or usage quota reached. "
             "Please try again later."
         )
 
-    if any("503" in error for error in errors):
+    if any(
+        str(code) in error
+        for error in errors
+        for code in (500, 502, 503, 504)
+    ):
 
         return (
-            "Gemini is experiencing high demand. "
-            "I tried multiple keys and retries, "
-            "but the service is still unavailable. "
-            "Please try again shortly."
+            "Groq is temporarily experiencing a service problem. "
+            "Multiple retries were attempted. Please try again shortly."
         )
 
     if any("timed out" in error.lower() for error in errors):
 
         return (
-            "Gemini requests timed out. "
+            "Groq requests timed out. "
             "Please try again shortly."
         )
 
     return (
-        "Gemini is temporarily unavailable. "
-        "Please check your API keys and Render logs."
+        "Groq AI is temporarily unavailable. "
+        "Check your API keys and Render logs."
     )
 
 
 # ==================================================
-# 12. MAIN CHAT ENDPOINT
+# 11. MAIN CHAT ENDPOINT
 # ==================================================
 
 @app.post("/api/chat")
@@ -704,16 +707,13 @@ async def chat(request: ChatRequest):
 
             )
 
-        # Get latest user message
         latest_question = ""
 
         for item in reversed(messages):
 
             if item["role"] == "user":
 
-                latest_question = (
-                    item["parts"][0]["text"]
-                )
+                latest_question = item["content"]
 
                 break
 
@@ -737,14 +737,11 @@ async def chat(request: ChatRequest):
         if greeting:
 
             return {
-
                 "reply": greeting,
-
                 "source": "greeting"
-
             }
 
-        # SECOND: Knowledge database
+        # SECOND: Local knowledge database
         database_answer = search_database(
             latest_question
         )
@@ -752,24 +749,18 @@ async def chat(request: ChatRequest):
         if database_answer:
 
             return {
-
                 "reply": database_answer,
-
                 "source": "database"
-
             }
 
-        # THIRD: Gemini API
-        gemini_reply = await ask_gemini(
+        # THIRD: Groq AI
+        groq_reply = await ask_groq(
             messages
         )
 
         return {
-
-            "reply": gemini_reply,
-
-            "source": "gemini"
-
+            "reply": groq_reply,
+            "source": "groq"
         }
 
     except Exception:
@@ -781,19 +772,14 @@ async def chat(request: ChatRequest):
             status_code=500,
 
             content={
-
-                "reply": (
-                    "An unexpected server error occurred. "
-                    "Please try again."
-                )
-
+                "reply": "An unexpected server error occurred."
             }
 
         )
 
 
 # ==================================================
-# 13. HEALTH CHECK
+# 12. HEALTH CHECK
 # ==================================================
 
 @app.get("/api/health")
@@ -804,6 +790,8 @@ async def health():
         "status": "online",
 
         "app": "Galaxy Nova AI",
+
+        "provider": "Groq",
 
         "model": MODEL,
 
@@ -819,7 +807,7 @@ async def health():
 
 
 # ==================================================
-# 14. WEBSITE HOME PAGE
+# 13. WEBSITE HOME PAGE
 # ==================================================
 
 @app.get("/")
@@ -843,7 +831,7 @@ async def home():
 
 
 # ==================================================
-# 15. LOCAL SERVER START
+# 14. LOCAL SERVER START
 # ==================================================
 
 if __name__ == "__main__":
@@ -861,4 +849,3 @@ if __name__ == "__main__":
         )
 
     )
-    
