@@ -1,578 +1,278 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Galaxy Nova AI</title>
 
+<!-- Markdown, sanitization and code highlighting -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+
 <style>
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-}
-
-body {
-    font-family: Arial, sans-serif;
-    background: #101820;
-    color: white;
-    height: 100vh;
-    display: flex;
-    overflow: hidden;
-}
-
-/* SIDEBAR */
-
-.sidebar {
-    width: 260px;
-    min-width: 260px;
-    background: #172832;
-    border-right: 1px solid #30434c;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.logo {
-    font-size: 24px;
-    font-weight: bold;
-    color: #42d392;
-    margin-bottom: 15px;
-}
-
-.new-chat,
-.webkit-btn {
-    width: 100%;
-    padding: 13px;
-    border: none;
-    border-radius: 10px;
-    font-size: 15px;
-    font-weight: bold;
-    text-align: left;
-    text-decoration: none;
-    display: block;
-    cursor: pointer;
-    transition: 0.2s;
-}
-
-.new-chat {
-    background: #247b65;
-    color: white;
-}
-
-.webkit-btn {
-    background: #174f80;
-    color: white;
-}
-
-.new-chat:hover {
-    background: #31977b;
-}
-
-.webkit-btn:hover {
-    background: #226da8;
-}
-
-.sidebar-info {
-    margin-top: auto;
-    color: #8da5ad;
-    font-size: 12px;
-    line-height: 1.6;
-}
-
-/* MAIN AREA */
-
-.main {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-header {
-    height: 65px;
-    min-height: 65px;
-    padding: 20px;
-    background: #172832;
-    border-bottom: 1px solid #30434c;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.header-title {
-    font-size: 19px;
-    font-weight: bold;
-}
-
-.model-status {
-    font-size: 12px;
-    color: #42d392;
-}
-
-/* CHAT */
-
-#chat {
-    flex: 1;
-    overflow-y: auto;
-    padding: 25px;
-}
-
-.welcome {
-    text-align: center;
-    margin: 15vh auto 0;
-    max-width: 500px;
-    color: #c1d2d8;
-}
-
-.welcome h1 {
-    color: #42d392;
-    font-size: 32px;
-    margin-bottom: 12px;
-}
-
-.welcome p {
-    font-size: 15px;
-    line-height: 1.6;
-}
-
-.message {
-    padding: 14px 17px;
-    border-radius: 13px;
-    margin-bottom: 18px;
-    max-width: 85%;
-    line-height: 1.7;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-}
-
-.user {
-    background: #176b58;
-    margin-left: auto;
-}
-
-.ai {
-    background: #263944;
-    margin-right: auto;
-}
-
-.error {
-    background: #572b35;
-    color: #ffd5dc;
-}
-
-/* INPUT */
-
-.input-area {
-    display: flex;
-    gap: 10px;
-    padding: 18px;
-    background: #172832;
-    border-top: 1px solid #30434c;
-}
-
-input {
-    flex: 1;
-    min-width: 0;
-    padding: 15px;
-    border-radius: 10px;
-    border: 1px solid #40515a;
-    background: #243640;
-    color: white;
-    outline: none;
-    font-size: 15px;
-}
-
-input:focus {
-    border-color: #42d392;
-}
-
-.send {
-    padding: 0 24px;
-    border-radius: 10px;
-    border: none;
-    background: #35b987;
-    color: #071b14;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-.send:hover {
-    background: #42d392;
-}
-
-.send:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* DISCLAIMER */
-
-.disclaimer {
-    background: #172832;
-    text-align: center;
-    padding: 9px 12px;
-    color: #91a6ad;
-    font-size: 11px;
-    border-top: 1px solid #30434c;
-}
-
-/* MOBILE */
-
-@media(max-width: 650px) {
-
-    .sidebar {
-        width: 76px;
-        min-width: 76px;
-        padding: 10px 7px;
-        align-items: center;
-    }
-
-    .logo {
-        font-size: 12px;
-        text-align: center;
-        line-height: 1.5;
-        margin: 8px 0;
-    }
-
-    .new-chat,
-    .webkit-btn {
-        font-size: 10px;
-        text-align: center;
-        padding: 12px 4px;
-        line-height: 1.5;
-    }
-
-    .sidebar-info {
-        display: none;
-    }
-
-    header {
-        padding: 15px 10px;
-    }
-
-    .header-title {
-        font-size: 15px;
-    }
-
-    .model-status {
-        font-size: 10px;
-    }
-
-    #chat {
-        padding: 13px;
-    }
-
-    .message {
-        max-width: 95%;
-    }
-
-    .input-area {
-        padding: 10px;
-    }
-
-    input {
-        padding: 12px;
-        font-size: 14px;
-    }
-
-    .send {
-        padding: 0 15px;
-    }
-
-    .welcome h1 {
-        font-size: 25px;
-    }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#101820;color:white;height:100vh;display:flex;overflow:hidden}
+.sidebar{width:260px;min-width:260px;background:#172832;border-right:1px solid #30434c;padding:20px;display:flex;flex-direction:column;gap:15px}
+.logo{font-size:24px;font-weight:bold;color:#42d392;margin-bottom:15px}
+.new-chat,.webkit-btn{width:100%;padding:13px;border:0;border-radius:10px;font-size:15px;font-weight:bold;text-align:left;text-decoration:none;display:block;cursor:pointer;transition:.2s}
+.new-chat{background:#247b65;color:white}.webkit-btn{background:#174f80;color:white}
+.new-chat:hover{background:#31977b}.webkit-btn:hover{background:#226da8}
+.sidebar-info{margin-top:auto;color:#8da5ad;font-size:12px;line-height:1.6}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+header{height:65px;min-height:65px;padding:20px;background:#172832;border-bottom:1px solid #30434c;display:flex;align-items:center;justify-content:space-between}
+.header-title{font-size:19px;font-weight:bold}.model-status{font-size:12px;color:#42d392}
+#chat{flex:1;overflow-y:auto;padding:25px}
+.welcome{text-align:center;margin:15vh auto 0;max-width:500px;color:#c1d2d8}
+.welcome h1{color:#42d392;font-size:32px;margin-bottom:12px}.welcome p{font-size:15px;line-height:1.6}
+.message{padding:14px 17px;border-radius:13px;margin-bottom:18px;max-width:90%;line-height:1.7;overflow-wrap:anywhere;position:relative}
+.user{background:#176b58;margin-left:auto;white-space:pre-wrap}.ai{background:#263944;margin-right:auto}.error{background:#572b35;color:#ffd5dc}
+.message-content{min-width:0}.message-actions{display:flex;justify-content:flex-end;margin-top:10px}
+.copy-btn,.code-copy{border:1px solid #55717c;background:#1b303a;color:#d9e8ed;border-radius:7px;padding:5px 9px;font-size:12px;cursor:pointer}
+.copy-btn:hover,.code-copy:hover{background:#247b65}
+.ai p{margin:0 0 10px}.ai p:last-child{margin-bottom:0}.ai h1,.ai h2,.ai h3,.ai h4{color:#73e0b3;margin:15px 0 8px;line-height:1.3}
+.ai ul,.ai ol{padding-left:24px;margin:8px 0 12px}.ai li{margin:4px 0}.ai blockquote{border-left:3px solid #42d392;padding:7px 12px;margin:10px 0;color:#c5d7dd;background:#20343e}
+.ai a{color:#70c9ff}.ai hr{border:0;border-top:1px solid #5b7079;margin:14px 0}
+.ai :not(pre)>code{background:#14242c;padding:2px 5px;border-radius:5px;color:#a9e8cf}
+.code-wrap{position:relative;margin:12px 0}.code-wrap pre{overflow-x:auto;padding:16px;border-radius:9px;background:#101820!important;border:1px solid #40545d}
+.code-wrap pre code{white-space:pre;overflow-wrap:normal}.code-copy{position:absolute;top:7px;right:7px;z-index:1}
+.table-wrap{width:100%;overflow-x:auto;margin:12px 0;border-radius:8px;border:1px solid #50646d}
+.ai table{border-collapse:collapse;min-width:460px;width:100%;font-size:14px;background:#1c303a}
+.ai th,.ai td{padding:9px 12px;text-align:left;border:1px solid #40545d;vertical-align:top}
+.ai th{background:#174f48;color:#dffff2}.ai tr:nth-child(even) td{background:#223944}
+.message-image{display:block;max-width:min(260px,100%);max-height:220px;object-fit:contain;border-radius:9px;margin:0 0 9px;border:1px solid #ffffff33}
+.input-area{padding:12px 18px;background:#172832;border-top:1px solid #30434c}
+.composer{display:flex;align-items:center;gap:9px}
+#prompt{flex:1;min-width:0;padding:15px;border-radius:10px;border:1px solid #40515a;background:#243640;color:white;outline:none;font-size:15px}
+#prompt:focus{border-color:#42d392}
+.send,.attach{padding:0 18px;min-height:48px;border-radius:10px;border:0;font-weight:bold;cursor:pointer}
+.send{background:#35b987;color:#071b14}.send:hover{background:#42d392}.send:disabled{opacity:.5;cursor:not-allowed}
+.attach{background:#174f80;color:white;font-size:20px}.attach:hover{background:#226da8}
+#imageInput{display:none}
+.image-preview{display:none;align-items:center;gap:10px;margin:0 0 10px;padding:8px;background:#20343e;border:1px solid #40545a;border-radius:9px;width:max-content;max-width:100%}
+.image-preview img{width:58px;height:58px;object-fit:cover;border-radius:6px}
+.image-preview span{font-size:12px;color:#c6d8de;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.remove-image{background:#572b35;color:white;border:0;border-radius:7px;padding:7px 9px;cursor:pointer}
+.input-hint{color:#91a6ad;font-size:10px;margin-top:6px}
+.disclaimer{background:#172832;text-align:center;padding:9px 12px;color:#91a6ad;font-size:11px;border-top:1px solid #30434c}
+@media(max-width:650px){
+.sidebar{width:76px;min-width:76px;padding:10px 7px;align-items:center}
+.logo{font-size:12px;text-align:center;line-height:1.5;margin:8px 0}
+.new-chat,.webkit-btn{font-size:10px;text-align:center;padding:12px 4px;line-height:1.5}
+.sidebar-info{display:none}header{padding:15px 10px}.header-title{font-size:15px}.model-status{font-size:10px}
+#chat{padding:13px}.message{max-width:97%;padding:12px}.input-area{padding:9px}
+#prompt{padding:12px;font-size:14px}.send{padding:0 12px}.attach{padding:0 13px}
+.welcome h1{font-size:25px}.ai table{font-size:12px}.ai th,.ai td{padding:7px 9px}
 }
 </style>
 </head>
-
 <body>
-
-<!-- SIDEBAR -->
-
 <aside class="sidebar">
-
-    <div class="logo">
-        ✦ Galaxy Nova AI
-    </div>
-
-    <button class="new-chat" onclick="newChat()">
-        ＋ New Chat
-    </button>
-
-    <!-- GALAXY WEBKIT BUTTON -->
-
-    <a
-        class="webkit-btn"
-        href="https://galaxyforte-4.onrender.com"
-        target="_blank"
-        rel="noopener noreferrer"
-    >
-        🌌 Galaxy Webkit
-    </a>
-
-    <div class="sidebar-info">
-        Galaxy Projects<br><br>
-        Your AI assistant.
-    </div>
-
+  <div class="logo">✦ Galaxy Nova AI</div>
+  <button class="new-chat" onclick="newChat()">＋ New Chat</button>
+  <a class="webkit-btn" href="https://galaxyforte-4.onrender.com" target="_blank" rel="noopener noreferrer">🌌 Galaxy Webkit</a>
+  <div class="sidebar-info">Galaxy Projects<br><br>Your AI assistant.</div>
 </aside>
 
-<!-- MAIN CONTENT -->
-
 <main class="main">
+  <header>
+    <div class="header-title">Galaxy Nova AI</div>
+    <div class="model-status">● Groq AI + Vision</div>
+  </header>
 
-    <header>
-
-        <div class="header-title">
-            Galaxy Nova AI
-        </div>
-
-        <div class="model-status">
-            ● Qwen 2.5
-        </div>
-
-    </header>
-
-    <!-- CHAT MESSAGES -->
-
-    <div id="chat">
-
-        <div class="welcome" id="welcome">
-
-            <h1>Welcome to Galaxy Nova AI</h1>
-
-            <p>
-                Your personal AI assistant powered by Qwen 2.5.
-                Ask questions, explore ideas and write code!
-            </p>
-
-        </div>
-
+  <div id="chat">
+    <div class="welcome" id="welcome">
+      <h1>Welcome to Galaxy Nova AI</h1>
+      <p>Your personal AI assistant. Ask questions, explore ideas, write code, or attach an image for AI to understand!</p>
     </div>
+  </div>
 
-    <!-- INPUT AREA -->
-
-    <div class="input-area">
-
-        <input
-            id="prompt"
-            type="text"
-            placeholder="Message Galaxy Nova AI..."
-            autocomplete="off"
-        >
-
-        <button
-            class="send"
-            id="sendBtn"
-            onclick="sendMessage()"
-        >
-            Send
-        </button>
-
+  <div class="input-area">
+    <div class="image-preview" id="imagePreview">
+      <img id="previewImage" alt="Selected image preview">
+      <span id="imageName"></span>
+      <button class="remove-image" type="button" onclick="removeImage()">Remove</button>
     </div>
-
-    <!-- DISCLAIMER -->
-
-    <div class="disclaimer">
-        Galaxy Nova AI can make mistakes. Check important information.
+    <div class="composer">
+      <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp">
+      <button class="attach" type="button" id="attachBtn" title="Attach image" aria-label="Attach image">＋</button>
+      <input id="prompt" type="text" placeholder="Message Galaxy Nova AI..." autocomplete="off">
+      <button class="send" id="sendBtn" onclick="sendMessage()">Send</button>
     </div>
-
+    <div class="input-hint">Attach PNG, JPG or WEBP (maximum 5 MB). Ask a question about the image.</div>
+  </div>
+  <div class="disclaimer">Galaxy Nova AI can make mistakes. Check important information.</div>
 </main>
 
 <script>
+const chat=document.getElementById("chat");
+const promptInput=document.getElementById("prompt");
+const sendBtn=document.getElementById("sendBtn");
+const imageInput=document.getElementById("imageInput");
+const imagePreview=document.getElementById("imagePreview");
+const previewImage=document.getElementById("previewImage");
+const imageName=document.getElementById("imageName");
+let messages=[];
+let busy=false;
+let selectedImage=null;
+const MAX_IMAGE_BYTES=5*1024*1024;
 
-// ======================================
-// NOVA AI CHAT SYSTEM
-// ======================================
-
-const chat = document.getElementById("chat");
-
-const promptInput = document.getElementById("prompt");
-
-const sendBtn = document.getElementById("sendBtn");
-
-let messages = [];
-
-let busy = false;
-
-
-// ======================================
-// DISPLAY MESSAGE
-// ======================================
-
-function addMessage(text, type) {
-
-    document.getElementById("welcome")?.remove();
-
-    const div = document.createElement("div");
-
-    div.className = "message " + type;
-
-    div.textContent = text;
-
-    chat.appendChild(div);
-
-    chat.scrollTop = chat.scrollHeight;
-
-    return div;
+if(window.marked){
+  marked.setOptions({gfm:true,breaks:true});
 }
 
+document.getElementById("attachBtn").addEventListener("click",()=>imageInput.click());
+imageInput.addEventListener("change",handleImageSelect);
 
-// ======================================
-// SEND MESSAGE TO PYTHON BACKEND
-// ======================================
-
-async function sendMessage() {
-
-    const text = promptInput.value.trim();
-
-    if (!text || busy) return;
-
-    promptInput.value = "";
-
-    busy = true;
-
-    sendBtn.disabled = true;
-
-    promptInput.disabled = true;
-
-    messages.push({
-        role: "user",
-        content: text
+function handleImageSelect(){
+  const file=imageInput.files && imageInput.files[0];
+  if(!file)return;
+  if(!["image/png","image/jpeg","image/webp"].includes(file.type)){
+    alert("Please select a PNG, JPG or WEBP image.");imageInput.value="";return;
+  }
+  if(file.size>MAX_IMAGE_BYTES){
+    alert("Image is too large. Please choose an image smaller than 5 MB.");imageInput.value="";return;
+  }
+  const reader=new FileReader();
+  reader.onload=()=>{
+    selectedImage={data_uri:reader.result,mime_type:file.type,name:file.name};
+    previewImage.src=reader.result;
+    imageName.textContent=file.name;
+    imagePreview.style.display="flex";
+  };
+  reader.onerror=()=>alert("Could not read this image. Please try another.");
+  reader.readAsDataURL(file);
+}
+function removeImage(){
+  selectedImage=null;imageInput.value="";previewImage.removeAttribute("src");
+  imagePreview.style.display="none";
+}
+function addUserMessage(text,imageData){
+  document.getElementById("welcome")?.remove();
+  const div=document.createElement("div");div.className="message user";
+  if(imageData){
+    const img=document.createElement("img");img.className="message-image";
+    img.src=imageData;img.alt="Uploaded image";div.appendChild(img);
+  }
+  const content=document.createElement("div");content.textContent=text || "Please describe this image.";
+  div.appendChild(content);chat.appendChild(div);chat.scrollTop=chat.scrollHeight;
+}
+function renderMarkdown(raw){
+  const source=window.marked?marked.parse(raw):escapeHtml(raw).replace(/\n/g,"<br>");
+  return window.DOMPurify?DOMPurify.sanitize(source):source;
+}
+function escapeHtml(value){
+  return String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function addAssistantMessage(text){
+  document.getElementById("welcome")?.remove();
+  const div=document.createElement("div");div.className="message ai";
+  const content=document.createElement("div");content.className="message-content";
+  content.innerHTML=renderMarkdown(text);
+  div.appendChild(content);
+  const actions=document.createElement("div");actions.className="message-actions";
+  const copy=document.createElement("button");copy.className="copy-btn";copy.textContent="Copy response";
+  copy.addEventListener("click",()=>copyText(text,copy));
+  actions.appendChild(copy);div.appendChild(actions);
+  // Wrap tables so wide Markdown tables scroll horizontally on narrow screens.
+  content.querySelectorAll("table").forEach(table=>{
+    const wrapper=document.createElement("div");wrapper.className="table-wrap";
+    table.parentNode.insertBefore(wrapper,table);wrapper.appendChild(table);
+  });
+  // Add a separate copy button to each code block.
+  content.querySelectorAll("pre").forEach(pre=>{
+    const wrap=document.createElement("div");wrap.className="code-wrap";
+    pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);
+    const codeButton=document.createElement("button");codeButton.className="code-copy";
+    codeButton.textContent="Copy code";
+    codeButton.addEventListener("click",()=>{
+      const code=pre.querySelector("code")?.innerText || pre.innerText;
+      copyText(code,codeButton);
     });
-
-    addMessage(text, "user");
-
-    const loading = addMessage(
-        "Galaxy Nova AI is thinking...",
-        "ai"
-    );
-
-    try {
-
-        const response = await fetch("/api/chat", {
-
-            method: "POST",
-
-            headers: {
-                "Content-Type": "application/json"
-            },
-
-            body: JSON.stringify({
-                messages: messages
-            })
-
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-
-            throw new Error(
-                data.detail || "Something went wrong."
-            );
-
-        }
-
-        if (!data.reply) {
-
-            throw new Error("Empty response from AI.");
-
-        }
-
-        loading.textContent = data.reply;
-
-        messages.push({
-
-            role: "assistant",
-
-            content: data.reply
-
-        });
-
-    }
-
-    catch (error) {
-
-        loading.textContent =
-            "Error: " + error.message;
-
-        loading.classList.add("error");
-
-        messages.pop();
-
-    }
-
-    finally {
-
-        busy = false;
-
-        sendBtn.disabled = false;
-
-        promptInput.disabled = false;
-
-        promptInput.focus();
-
-        chat.scrollTop = chat.scrollHeight;
-
-    }
-
+    wrap.appendChild(codeButton);
+  });
+  if(window.hljs){
+    content.querySelectorAll("pre code").forEach(block=>{
+      try{hljs.highlightElement(block);}catch(e){}
+    });
+  }
+  chat.appendChild(div);chat.scrollTop=chat.scrollHeight;return div;
 }
-
-
-// ======================================
-// NEW CHAT
-// ======================================
-
-function newChat() {
-
-    if (busy) return;
-
-    messages = [];
-
-    chat.innerHTML = `
-
-        <div class="welcome" id="welcome">
-
-            <h1>Welcome to Galaxy Nova AI</h1>
-
-            <p>
-                Your personal AI assistant powered by Qwen 2.5.
-                Ask questions, explore ideas and write code!
-            </p>
-
-        </div>
-
-    `;
-
-    promptInput.focus();
-
-}
-
-
-// ======================================
-// ENTER KEY SUPPORT
-// ======================================
-
-promptInput.addEventListener(
-    "keydown",
-    function(event) {
-
-        if (event.key === "Enter") {
-
-            sendMessage();
-
-        }
-
+async function copyText(text,button){
+  const original=button.textContent;
+  try{
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+    }else{
+      const area=document.createElement("textarea");area.value=text;
+      area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);
+      area.select();document.execCommand("copy");area.remove();
     }
-);
-
+    button.textContent="Copied!";
+  }catch(error){button.textContent="Copy failed";}
+  setTimeout(()=>button.textContent=original,1400);
+}
+async function sendMessage(){
+  const text=promptInput.value.trim();
+  if((!text&&!selectedImage)||busy)return;
+  const imageForRequest=selectedImage?selectedImage.data_uri:null;
+  const imageForDisplay=imageForRequest;
+  promptInput.value="";busy=true;sendBtn.disabled=true;
+  document.getElementById("attachBtn").disabled=true;promptInput.disabled=true;
+  addUserMessage(text,imageForDisplay);
+  messages.push({role:"user",content:text || "Please describe the attached image."});
+  const loading=addAssistantMessage("Galaxy Nova AI is thinking...");
+  loading.querySelector(".message-content").textContent="Galaxy Nova AI is thinking...";
+  try{
+    const payload={messages:messages};
+    if(imageForRequest)payload.image={data_uri:imageForRequest,mime_type:selectedImage.mime_type};
+    removeImage();
+    const response=await fetch("/api/chat",{
+      method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)
+    });
+    let data;
+    try{data=await response.json();}catch(e){throw new Error("The server returned an invalid response. Check Render logs.");}
+    if(!response.ok)throw new Error(data.detail||data.reply||"Something went wrong.");
+    if(!data.reply)throw new Error("Empty response from AI.");
+    const reply=String(data.reply);
+    loading.querySelector(".message-content").innerHTML=renderMarkdown(reply);
+    const actions=loading.querySelector(".message-actions");
+    actions.innerHTML="";
+    const copyButton=document.createElement("button");
+    copyButton.className="copy-btn";
+    copyButton.textContent="Copy response";
+    copyButton.addEventListener("click",()=>copyText(reply,copyButton));
+    actions.appendChild(copyButton);
+    loading.querySelectorAll("table").forEach(table=>{
+      const wrapper=document.createElement("div");wrapper.className="table-wrap";
+      table.parentNode.insertBefore(wrapper,table);wrapper.appendChild(table);
+    });
+    loading.querySelectorAll("pre").forEach(pre=>{
+      const wrap=document.createElement("div");wrap.className="code-wrap";
+      pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);
+      const codeButton=document.createElement("button");codeButton.className="code-copy";codeButton.textContent="Copy code";
+      codeButton.addEventListener("click",()=>copyText(pre.querySelector("code")?.innerText||pre.innerText,codeButton));
+      wrap.appendChild(codeButton);
+    });
+    if(window.hljs)loading.querySelectorAll("pre code").forEach(block=>{try{hljs.highlightElement(block);}catch(e){}});
+    messages.push({role:"assistant",content:reply});
+  }catch(error){
+    loading.querySelector(".message-content").textContent="Error: "+error.message;
+    loading.classList.add("error");
+    messages.pop();
+  }finally{
+    busy=false;sendBtn.disabled=false;document.getElementById("attachBtn").disabled=false;
+    promptInput.disabled=false;promptInput.focus();chat.scrollTop=chat.scrollHeight;
+  }
+}
+function newChat(){
+  if(busy)return;
+  messages=[];removeImage();
+  chat.innerHTML=`<div class="welcome" id="welcome"><h1>Welcome to Galaxy Nova AI</h1><p>Your personal AI assistant. Ask questions, explore ideas, write code, or attach an image for AI to understand!</p></div>`;
+  promptInput.focus();
+}
+promptInput.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();sendMessage();}});
 </script>
-
 </body>
 </html>
