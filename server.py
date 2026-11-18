@@ -29,6 +29,9 @@ DATABASE_FILE = BASE_DIR / "training_data.json"
 MAX_RETRIES_PER_KEY = 2
 REQUEST_TIMEOUT = 90
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_PDF_BYTES = 10 * 1024 * 1024
+MAX_PDF_PAGES = 30
+MAX_PDF_TEXT_CHARS = 80000
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 logging.basicConfig(level=logging.INFO)
@@ -165,10 +168,15 @@ class ImageInput(BaseModel):
     data_uri: str
     mime_type: str = ""
 
+class PDFInput(BaseModel):
+    data_uri: str
+    name: str = "uploaded.pdf"
+
 class ChatRequest(BaseModel):
     messages: list = Field(default_factory=list)
     message: str = ""
     image: ImageInput | None = None
+    pdf: PDFInput | None = None
 
 # ==================================================
 # 7. SYSTEM INSTRUCTION
@@ -181,8 +189,10 @@ When asked for code, provide complete working code and explain where files go.
 Use Markdown formatting when useful: headings, bold, lists, fenced code blocks,
 and valid Markdown tables. Do not wrap the entire answer in a code block.
 Admit uncertainty. Never invent facts or sources. Do not claim to browse unless
-browsing is actually available. When an image is attached, inspect it carefully
-and answer the user's question about what is visible. Do not claim to identify
+browsing is actually available. When an image is attached, inspect it carefully and answer the user's question
+about what is visible. When PDF text is included in a user message, use that
+document as the source for questions, summaries and extraction. Clearly say if
+the requested information is not present in the document. Do not claim to identify
 a person in an image.
 You are Galaxy Nova AI.
 """
@@ -242,6 +252,64 @@ def validate_image(image: ImageInput):
     if len(raw) > MAX_IMAGE_BYTES:
         raise ValueError("Image is too large. Maximum upload size is 5 MB.")
     return image.data_uri
+
+def extract_pdf_text(pdf: PDFInput):
+    """Validate an uploaded PDF and extract selectable text from it."""
+    match = re.fullmatch(r"data:application/pdf;base64,([A-Za-z0-9+/=\s]+)", pdf.data_uri)
+    if not match:
+        raise ValueError("The uploaded PDF data is invalid.")
+
+    encoded = re.sub(r"\s+", "", match.group(1))
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        raise ValueError("The PDF could not be decoded.")
+
+    if not raw or not raw.startswith(b"%PDF-"):
+        raise ValueError("This file does not appear to be a valid PDF.")
+    if len(raw) > MAX_PDF_BYTES:
+        raise ValueError("PDF is too large. Maximum upload size is 10 MB.")
+
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        raise ValueError("PDF support needs the pypdf package. Add 'pypdf' to requirements.txt and redeploy.")
+
+    try:
+        import io
+        reader = PdfReader(io.BytesIO(raw), strict=False)
+        if reader.is_encrypted:
+            try:
+                decrypted = reader.decrypt("")
+            except Exception:
+                decrypted = 0
+            if not decrypted:
+                raise ValueError("This PDF is password-protected. Please upload an unlocked PDF.")
+
+        if len(reader.pages) > MAX_PDF_PAGES:
+            raise ValueError(f"This PDF has {len(reader.pages)} pages. The maximum supported is {MAX_PDF_PAGES} pages.")
+
+        extracted_pages = []
+        for page_number, page in enumerate(reader.pages, start=1):
+            page_text = (page.extract_text() or "").strip()
+            if page_text:
+                extracted_pages.append(f"--- Page {page_number} ---\n{page_text}")
+
+        document_text = "\n\n".join(extracted_pages).strip()
+        if not document_text:
+            raise ValueError("I couldn't find selectable text in this PDF. It may be scanned; OCR is not enabled yet.")
+
+        if len(document_text) > MAX_PDF_TEXT_CHARS:
+            document_text = document_text[:MAX_PDF_TEXT_CHARS] + "\n\n[Document text shortened because it exceeded the processing limit.]"
+
+        logger.info("PDF text extracted: %s pages, %s characters", len(reader.pages), len(document_text))
+        return document_text, len(reader.pages)
+    except ValueError:
+        raise
+    except Exception:
+        logger.exception("PDF extraction failed")
+        raise ValueError("Could not read this PDF. Try exporting it again or uploading another PDF.")
+
 
 # ==================================================
 # 9. GROQ API WITH KEY ROTATION AND RETRIES
@@ -355,14 +423,35 @@ async def chat(request: ChatRequest):
             return JSONResponse(status_code=400, content={"reply": "Please send a valid message."})
 
         image_data_uri = None
+        pdf_attached = False
+        if request.image and request.pdf:
+            message = "Please attach only one image or PDF at a time."
+            return JSONResponse(status_code=400, content={"reply": message, "detail": message})
+
         if request.image:
             try:
                 image_data_uri = validate_image(request.image)
             except ValueError as error:
                 return JSONResponse(status_code=400, content={"reply": str(error), "detail": str(error)})
 
+        if request.pdf:
+            try:
+                pdf_text, page_count = extract_pdf_text(request.pdf)
+                pdf_attached = True
+                latest_user = next((item for item in reversed(messages) if item["role"] == "user"), None)
+                if latest_user is None:
+                    raise ValueError("Please send a question with your PDF.")
+                latest_user["content"] += (
+                    "\n\n[PDF DOCUMENT: " + request.pdf.name[:180] +
+                    f" | {page_count} pages]\n" + pdf_text +
+                    "\n[END OF PDF DOCUMENT]"
+                )
+                latest_question = latest_user["content"]
+            except ValueError as error:
+                return JSONResponse(status_code=400, content={"reply": str(error), "detail": str(error)})
+
         # Greetings and local database are used only for text-only messages.
-        if not image_data_uri:
+        if not image_data_uri and not pdf_attached:
             greeting = greeting_reply(latest_question)
             if greeting:
                 return {"reply": greeting, "source": "greeting"}
@@ -371,7 +460,7 @@ async def chat(request: ChatRequest):
                 return {"reply": database_answer, "source": "database"}
 
         reply = await ask_groq(messages, image_data_uri)
-        return {"reply": reply, "source": "groq_vision" if image_data_uri else "groq"}
+        return {"reply": reply, "source": "groq_vision" if image_data_uri else ("groq_pdf" if pdf_attached else "groq")}
     except Exception:
         logger.exception("Chat endpoint error")
         return JSONResponse(status_code=500, content={"reply": "An unexpected server error occurred."})
@@ -390,6 +479,7 @@ async def health():
         "api_keys_loaded": len(API_KEYS),
         "database_entries": len(DATABASE),
         "image_upload_enabled": True,
+        "pdf_upload_enabled": True,
         "time": datetime.now(timezone.utc).isoformat()
     }
 
