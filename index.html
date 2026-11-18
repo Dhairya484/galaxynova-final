@@ -41,7 +41,7 @@ header{height:65px;min-height:65px;padding:20px;background:#172832;border-bottom
 .ai table{border-collapse:collapse;min-width:460px;width:100%;font-size:14px;background:#1c303a}
 .ai th,.ai td{padding:9px 12px;text-align:left;border:1px solid #40545d;vertical-align:top}
 .ai th{background:#174f48;color:#dffff2}.ai tr:nth-child(even) td{background:#223944}
-.message-image{display:block;max-width:min(260px,100%);max-height:220px;object-fit:contain;border-radius:9px;margin:0 0 9px;border:1px solid #ffffff33}
+.message-image{display:block;max-width:min(260px,100%);max-height:220px;object-fit:contain;border-radius:9px;margin:0 0 9px;border:1px solid #ffffff33}.message-file{display:inline-flex;align-items:center;gap:8px;background:#142b36;border:1px solid #5a7580;padding:9px 12px;border-radius:8px;margin-bottom:8px;font-size:13px}
 .input-area{padding:12px 18px;background:#172832;border-top:1px solid #30434c}
 .composer{display:flex;align-items:center;gap:9px}
 #prompt{flex:1;min-width:0;padding:15px;border-radius:10px;border:1px solid #40515a;background:#243640;color:white;outline:none;font-size:15px}
@@ -51,7 +51,7 @@ header{height:65px;min-height:65px;padding:20px;background:#172832;border-bottom
 .attach{background:#174f80;color:white;font-size:20px}.attach:hover{background:#226da8}
 #imageInput{display:none}
 .image-preview{display:none;align-items:center;gap:10px;margin:0 0 10px;padding:8px;background:#20343e;border:1px solid #40545a;border-radius:9px;width:max-content;max-width:100%}
-.image-preview img{width:58px;height:58px;object-fit:cover;border-radius:6px}
+.image-preview img{width:58px;height:58px;object-fit:cover;border-radius:6px}.file-icon{display:none;font-size:30px;align-items:center;justify-content:center;width:58px;height:58px;background:#172832;border-radius:6px}
 .image-preview span{font-size:12px;color:#c6d8de;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .remove-image{background:#572b35;color:white;border:0;border-radius:7px;padding:7px 9px;cursor:pointer}
 .input-hint{color:#91a6ad;font-size:10px;margin-top:6px}
@@ -91,16 +91,17 @@ header{height:65px;min-height:65px;padding:20px;background:#172832;border-bottom
   <div class="input-area">
     <div class="image-preview" id="imagePreview">
       <img id="previewImage" alt="Selected image preview">
+      <span class="file-icon" id="fileIcon" aria-hidden="true">📎</span>
       <span id="imageName"></span>
       <button class="remove-image" type="button" onclick="removeImage()">Remove</button>
     </div>
     <div class="composer">
-      <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp">
-      <button class="attach" type="button" id="attachBtn" title="Attach image" aria-label="Attach image">＋</button>
+      <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf">
+      <button class="attach" type="button" id="attachBtn" title="Attach an image or PDF" aria-label="Attach an image or PDF">＋</button>
       <input id="prompt" type="text" placeholder="Message Galaxy Nova AI..." autocomplete="off">
       <button class="send" id="sendBtn" onclick="sendMessage()">Send</button>
     </div>
-    <div class="input-hint">Attach PNG, JPG or WEBP (maximum 5 MB). Ask a question about the image.</div>
+    <div class="input-hint">Attach PNG, JPG, WEBP (5 MB) or PDF (10 MB). PDFs are read as text; scanned PDFs may not work.</div>
   </div>
   <div class="disclaimer">Galaxy Nova AI can make mistakes. Check important information.</div>
 </main>
@@ -117,6 +118,7 @@ let messages=[];
 let busy=false;
 let selectedImage=null;
 const MAX_IMAGE_BYTES=5*1024*1024;
+const MAX_PDF_BYTES=10*1024*1024;
 
 if(window.marked){
   marked.setOptions({gfm:true,breaks:true});
@@ -128,34 +130,68 @@ imageInput.addEventListener("change",handleImageSelect);
 function handleImageSelect(){
   const file=imageInput.files && imageInput.files[0];
   if(!file)return;
-  if(!["image/png","image/jpeg","image/webp"].includes(file.type)){
-    alert("Please select a PNG, JPG or WEBP image.");imageInput.value="";return;
+
+  const isImage=["image/png","image/jpeg","image/webp"].includes(file.type);
+  const isPdf=file.type==="application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+  if(!isImage && !isPdf){
+    alert("Please select a PNG, JPG, WEBP image or a PDF file.");
+    imageInput.value="";return;
   }
-  if(file.size>MAX_IMAGE_BYTES){
-    alert("Image is too large. Please choose an image smaller than 5 MB.");imageInput.value="";return;
+  if(isImage && file.size>MAX_IMAGE_BYTES){
+    alert("Image is too large. Please choose an image smaller than 5 MB.");
+    imageInput.value="";return;
   }
+  if(isPdf && file.size>MAX_PDF_BYTES){
+    alert("PDF is too large. Please choose a PDF smaller than 10 MB.");
+    imageInput.value="";return;
+  }
+
   const reader=new FileReader();
   reader.onload=()=>{
-    selectedImage={data_uri:reader.result,mime_type:file.type,name:file.name};
-    previewImage.src=reader.result;
+    selectedImage={
+      data_uri:reader.result,
+      mime_type:isPdf?"application/pdf":file.type,
+      type:isPdf?"pdf":"image",
+      name:file.name
+    };
     imageName.textContent=file.name;
+    if(isImage){
+      previewImage.src=reader.result;
+      previewImage.style.display="block";
+      document.getElementById("fileIcon").style.display="none";
+    }else{
+      previewImage.removeAttribute("src");
+      previewImage.style.display="none";
+      document.getElementById("fileIcon").style.display="flex";
+    }
     imagePreview.style.display="flex";
   };
-  reader.onerror=()=>alert("Could not read this image. Please try another.");
+  reader.onerror=()=>alert("Could not read this file. Please try another.");
   reader.readAsDataURL(file);
 }
 function removeImage(){
-  selectedImage=null;imageInput.value="";previewImage.removeAttribute("src");
+  selectedImage=null;
+  imageInput.value="";
+  previewImage.removeAttribute("src");
+  previewImage.style.display="block";
+  document.getElementById("fileIcon").style.display="none";
   imagePreview.style.display="none";
 }
-function addUserMessage(text,imageData){
+function addUserMessage(text,attachment){
   document.getElementById("welcome")?.remove();
   const div=document.createElement("div");div.className="message user";
-  if(imageData){
-    const img=document.createElement("img");img.className="message-image";
-    img.src=imageData;img.alt="Uploaded image";div.appendChild(img);
+  if(attachment){
+    if(attachment.type==="image"){
+      const img=document.createElement("img");img.className="message-image";
+      img.src=attachment.data_uri;img.alt="Uploaded image";div.appendChild(img);
+    }else{
+      const fileTag=document.createElement("div");fileTag.className="message-file";
+      fileTag.textContent="📄 "+attachment.name;div.appendChild(fileTag);
+    }
   }
-  const content=document.createElement("div");content.textContent=text || "Please describe this image.";
+  const content=document.createElement("div");
+  content.textContent=text || (attachment?.type==="pdf"?"Please read this PDF.":"Please describe this image.");
   div.appendChild(content);chat.appendChild(div);chat.scrollTop=chat.scrollHeight;
 }
 function renderMarkdown(raw){
@@ -216,17 +252,20 @@ async function copyText(text,button){
 async function sendMessage(){
   const text=promptInput.value.trim();
   if((!text&&!selectedImage)||busy)return;
-  const imageForRequest=selectedImage?selectedImage.data_uri:null;
-  const imageForDisplay=imageForRequest;
+  const attachment=selectedImage?{...selectedImage}:null;
   promptInput.value="";busy=true;sendBtn.disabled=true;
   document.getElementById("attachBtn").disabled=true;promptInput.disabled=true;
-  addUserMessage(text,imageForDisplay);
-  messages.push({role:"user",content:text || "Please describe the attached image."});
+  addUserMessage(text,attachment);
+  messages.push({role:"user",content:text || (attachment?.type==="pdf"?"Please read and summarize the attached PDF.":"Please describe the attached image.")});
   const loading=addAssistantMessage("Galaxy Nova AI is thinking...");
   loading.querySelector(".message-content").textContent="Galaxy Nova AI is thinking...";
   try{
     const payload={messages:messages};
-    if(imageForRequest)payload.image={data_uri:imageForRequest,mime_type:selectedImage.mime_type};
+    if(attachment?.type==="image"){
+      payload.image={data_uri:attachment.data_uri,mime_type:attachment.mime_type};
+    }else if(attachment?.type==="pdf"){
+      payload.pdf={data_uri:attachment.data_uri,name:attachment.name};
+    }
     removeImage();
     const response=await fetch("/api/chat",{
       method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)
@@ -240,8 +279,7 @@ async function sendMessage(){
     const actions=loading.querySelector(".message-actions");
     actions.innerHTML="";
     const copyButton=document.createElement("button");
-    copyButton.className="copy-btn";
-    copyButton.textContent="Copy response";
+    copyButton.className="copy-btn";copyButton.textContent="Copy response";
     copyButton.addEventListener("click",()=>copyText(reply,copyButton));
     actions.appendChild(copyButton);
     loading.querySelectorAll("table").forEach(table=>{
